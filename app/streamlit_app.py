@@ -19,18 +19,20 @@ import streamlit as st
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inventario.analisis import Config  # noqa: E402
 from inventario.datos import cargar_extracto, cargar_tienda  # noqa: E402
 from inventario.demanda import muestrear_demanda, muestrear_demanda_bloques, primera_venta  # noqa: E402
 from inventario.simulador import muestrear_lead_times, simular  # noqa: E402
+from inicio import guia, vista_inicio  # noqa: E402
 
 TIENDA = "CA_1"
 COLORES = ["#2a78d6", "#eb6834", "#1baf7a"]
 POLITICAS = [("formula", "Fórmula"), ("sim", "Simulación diaria"), ("bloques", "Simulación por bloques")]
 SEMILLA_APP = 2026
 REPS_APP = 200
-VISTAS = ["Curva inventario–servicio", "Fórmula vs simulación", "Producto"]
+VISTAS = ["Inicio", "Curva inventario–servicio", "Fórmula vs simulación", "Producto"]
 
 
 DEMO = RAIZ / "app" / "datos_demo"
@@ -131,6 +133,7 @@ def layout_base(fig: go.Figure, x: str, y: str, formato_y: str | None = None) ->
 
 def vista_curva() -> None:
     st.header("Curva inventario–servicio")
+    guia("curva")
     st.caption("Cada punto es una meta de fill rate pedida a la simulación; el eje Y es el fill "
                "rate logrado en el año de prueba y el eje X el inventario promedio valorizado.")
     b = cargar_salida("curva_b.csv")
@@ -167,6 +170,7 @@ def vista_curva() -> None:
 
 def vista_resumen() -> None:
     st.header("Fórmula vs simulación")
+    guia("resumen")
     st.caption("Meta de servicio por ciclo α = 0,95. Se compara lo logrado en el año de prueba.")
     r = cargar_salida("resumen_a.csv")
     if r is None:
@@ -203,6 +207,7 @@ def vista_resumen() -> None:
 
 def vista_producto() -> None:
     st.header("Producto")
+    guia("producto")
     a = cargar_salida("pregunta_a.csv")
     if a is None:
         return aviso_sin_outputs()
@@ -273,7 +278,9 @@ def main() -> None:
     st.sidebar.markdown(
         "---\n[Código y reporte en GitHub](https://github.com/CastilloFelipe/inventario-estocastico)  \n"
         "Datos: competencia *M5 Forecasting – Accuracy* (Kaggle), tienda CA_1.")
-    {VISTAS[0]: vista_curva, VISTAS[1]: vista_resumen, VISTAS[2]: vista_producto}[vista]()
+    vistas = {VISTAS[0]: lambda: vista_inicio(cargar_salida), VISTAS[1]: vista_curva,
+              VISTAS[2]: vista_resumen, VISTAS[3]: vista_producto}
+    vistas[vista]()
 
 
 main()

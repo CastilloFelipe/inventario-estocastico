@@ -55,8 +55,29 @@ def _app(vista=None):
     return at
 
 
-def test_curva_carga_y_filtra(entorno):
+def test_inicio_es_la_vista_por_defecto_y_muestra_conclusiones(entorno):
     at = _app()
+    assert not at.exception
+    assert at.header[0].value == "¿De qué se trata?"
+    textos = " ".join(m.value for m in at.markdown)
+    # Las cifras salen de resumen_a.csv (α 0,9 en las tres políticas) y de curva_b.csv
+    assert "90,0%" in textos and "La fórmula no cumple su promesa" in textos
+    assert "pidiendo 95% de fill rate" in textos
+    assert len(at.metric) == 3
+    assert len(at.expander) >= 11  # limitaciones + conceptos
+
+
+def test_inicio_sin_outputs_no_falla(entorno):
+    out, _ = entorno
+    for f in out.iterdir():
+        f.unlink()
+    at = _app()
+    assert not at.exception
+    assert any("python main.py" in i.value for i in at.info)
+
+
+def test_curva_carga_y_filtra(entorno):
+    at = _app("Curva inventario–servicio")
     assert not at.exception
     assert at.header[0].value == "Curva inventario–servicio"
     at.multiselect[0].set_value(["FOODS", "TOTAL"]).run()

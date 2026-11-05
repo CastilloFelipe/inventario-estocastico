@@ -29,6 +29,9 @@ def main(tienda: str = "CA_1") -> None:
         if not origen.exists():
             sys.exit(f"Falta {origen}. Corre primero: python main.py --tienda {tienda}")
         shutil.copy2(origen, DESTINO / nombre)
+    diagnostico = RAIZ / "outputs" / "diagnostico.csv"  # opcional: cifras de la vista Inicio
+    if diagnostico.exists():
+        shutil.copy2(diagnostico, DESTINO / diagnostico.name)
     datos = cargar_tienda(RAIZ / "data" / "raw", tienda)
     guardar_extracto(datos, DESTINO / f"{tienda}.npz")
     total = sum(p.stat().st_size for p in DESTINO.iterdir()) / 1e6
