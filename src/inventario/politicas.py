@@ -34,6 +34,7 @@ def s_simulacion(
         raise ValueError(f"métrica desconocida: {metrica!r}")
     atributo = "servicio_ciclo" if metrica == "ciclo" else "fill_rate"
 
+    # Supone que el servicio es monótono creciente en S con números aleatorios comunes.
     def cumple(S: np.ndarray) -> np.ndarray:
         m = simular(demanda, S, R, lead_times, calentamiento)
         return getattr(m, atributo) >= meta

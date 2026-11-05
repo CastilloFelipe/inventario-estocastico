@@ -67,7 +67,7 @@ arriba). Los 16 son el stock de seguridad.
    pocas unidades y muchos días cero, esto es dudoso.
 2. **Días independientes:** lo que se vende hoy no dice nada de lo que se venderá mañana.
    De ahí sale el √(R+L): la varianza de la suma de n días independientes es n·σ². Si los
-   días buenos vienen en rachas, ese supuesto subestima el riesgo.
+   días buenos vienen en rachas o hay cambios lentos de nivel, ese supuesto subestima el riesgo.
 
 También usa el lead time promedio, como si fuera fijo.
 
@@ -170,7 +170,7 @@ La **autocorrelación de orden 1** es la correlación entre la venta de un día 
 siguiente: 0 sin dependencia, cercana a 1 con mucha.
 
 **En una entrevista:** "La falla de la fórmula se asociaba más a que los días vienen en
-rachas que a la forma de la demanda; simulando con bloques de días reales consecutivos el
+rachas (o en cambios lentos de nivel) que a la forma de la demanda; simulando con bloques de días reales consecutivos el
 servicio subió de 0,905 a 0,934, más cerca de la meta, aunque con más inventario. Parte de
 esas rachas podría venir de quiebres o de cambios de nivel, y eso lo declaro."
 

@@ -61,7 +61,7 @@ Total de la tienda (3.039 productos):
 
 El bootstrap por bloques necesita un 32% más de inventario que el bootstrap diario
 (197.837 vs 150.375 USD) y un 26% más que la fórmula. Ninguna política dejó productos sin
-alcanzar la meta en la calibración (`n_no_alcanzado` = 0 en las tres).
+alcanzar la meta en la calibración (`n_no_alcanzado` = 0 en las dos simulaciones; la fórmula no tiene noción de "alcanzado").
 
 ### Por clase de demanda (Syntetos-Boylan)
 
@@ -107,7 +107,7 @@ a otra parte, aunque con dos explicaciones alternativas que no se pueden descart
    10 días independientes (percentil 25: 1,342; percentil 75: 2,905). El 82,8% de los
    productos supera 1,2. La autocorrelación de un día al siguiente es baja pero
    casi siempre positiva (mediana 0,141; positiva en el 93,3% de los productos). En palabras
-   de negocio: los días buenos vienen en rachas, y en una racha la venta de una semana es
+   de negocio: los días buenos vienen en rachas o en cambios lentos de nivel, y en una racha la venta de una semana es
    más variable de lo que la fórmula supone.
 4. **La brecha crece con esa dependencia.** Agrupando los productos según ese cociente de
    varianzas:
@@ -145,7 +145,7 @@ bloques se mantiene alrededor de 0,94 en todos los tramos.
 | Sin censura | 1,2 a 2 | 731 | 0,929 | 0,919 | 0,940 |
 | Sin censura | 2 a 3 | 375 | 0,892 | 0,883 | 0,936 |
 | Sin censura | Más de 3 | 269 | 0,785 | 0,779 | 0,909 |
-| Con censura | Hasta 1,2 | 28 | 0,949 | 0,947 | 0,945 |
+| Con censura | Hasta 1,2 (n pequeño) | 28 | 0,949 | 0,947 | 0,945 |
 | Con censura | 1,2 a 2 | 240 | 0,927 | 0,917 | 0,938 |
 | Con censura | 2 a 3 | 320 | 0,899 | 0,890 | 0,937 |
 | Con censura | Más de 3 | 380 | 0,901 | 0,894 | 0,957 |
@@ -156,16 +156,16 @@ bloques se mantiene alrededor de 0,94 en todos los tramos.
 
 (El archivo trae también los tramos intermedios y el tercio medio de cambio de nivel.)
 
-Leído en conjunto: incluso entre los productos cuyo nivel casi no cambió, la fórmula baja
+Leído en conjunto: incluso en el tercio con menor cambio de nivel dentro de cada tramo, la fórmula baja
 de 0,970 a 0,912 al pasar de días casi independientes a muy dependientes, mientras que los
 bloques se mantienen (0,958 a 0,973). Y a igual dependencia, los productos que más cambiaron
 de nivel pierden entre 4,4 y 13,7 puntos de α con la fórmula y entre 4,8 y 9,2 con
 bloques.
 
 **Conclusión honesta:** la brecha de la fórmula **es consistente con** el supuesto de días
-independientes y **se asocia** a la dependencia medida, que persiste aun en productos sin
-censura sospechosa y con poco cambio de nivel. Los cambios de nivel por producto son una
-segunda causa importante, que ninguna de las tres políticas cubre bien. Copiar bloques de
+independientes y **se asocia** a la dependencia medida, que persiste tanto en productos sin
+censura sospechosa como, por separado, en el tercio con menor cambio de nivel. Los cambios de nivel por producto son un
+segundo factor asociado, que ninguna de las tres políticas cubre bien. Copiar bloques de
 28 días cierra cerca de dos tercios de la brecha de la fórmula (de 0,905 a 0,934, con meta
 0,95), a cambio de más inventario. Esto se observa en una sola tienda; no se probó que se
 generalice.
@@ -214,7 +214,7 @@ Por categoría, con bloques y meta 95%: FOODS logra 95,0% con 103.530 USD, HOBBI
 sería razonable si los ceros fueran al azar (columna `censura` de `pregunta_a.csv`). Es
 probable que en esos días no hubiera producto en la tienda: la venta registrada no es la
 demanda real. Su servicio logrado no es peor que el del resto (α con bloques 0,945 vs 0,929
-en los no marcados), pero eso no prueba nada sobre su demanda verdadera: si los quiebres
+en los no marcados; base: los 3.039 productos, a diferencia de la tabla de confusores, que usa los 2.797 con al menos 400 días), pero eso no prueba nada sobre su demanda verdadera: si los quiebres
 de la historia escondieron demanda, todas las políticas la subestiman por igual. La marca
 es mucho más común en productos suaves y erráticos (77,6% y 94,4%) que en intermitentes
 (22,5%), porque en un producto que vende casi todos los días una racha larga de ceros es
@@ -239,6 +239,20 @@ muy improbable.
   individuales.
 - **Sin costo de quiebre.** El análisis muestra cuánto cuesta cada nivel de servicio, no cuál
   es el nivel óptimo; para eso hace falta el margen perdido por unidad no vendida.
+- **Ventana de calibración larga.** μ, σ, el conjunto del bootstrap y el diagnóstico de
+  dependencia usan toda la historia de calibración desde la primera venta de cada producto
+  (varios años). El nivel de cada producto cambia mucho entre calibración y prueba
+  (`ratio_media`: percentil 10 = 0,523, percentil 90 = 1,679; `outputs/diagnostico.csv`).
+  Una ventana de calibración reciente podría cambiar tanto la brecha de la fórmula como la
+  medida de dependencia (las tendencias y cambios de nivel dentro de la calibración también
+  inflan `ratio_var_10`). Esto no se probó.
 - **El origen de la dependencia no está identificado.** Promociones, clima, eventos o los
   propios quiebres (rachas de ceros) pueden generarla; este análisis la mide, no la explica.
   Tampoco separa del todo su efecto del de los cambios de nivel por producto.
+
+## Próximos pasos
+
+- Probar una ventana de calibración reciente (por ejemplo, el último año o dos antes de la
+  prueba) y ver si cambian la brecha de la fórmula y la medida de dependencia.
+- Correr otra tienda con `--tienda`.
+- Probar otros largos de bloque.

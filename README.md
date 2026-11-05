@@ -38,6 +38,10 @@ Detalle, tablas por clase y categoría y limitaciones: [docs/resultados.md](docs
 streamlit run app/streamlit_app.py
 ```
 
+La app muestra solo la tienda analizada (CA_1), porque los resultados precalculados en
+`outputs/` son de una tienda. Para analizar otra: `python main.py --tienda X --salida otra_carpeta/`
+y luego `INVENTARIO_OUTPUTS=otra_carpeta streamlit run app/streamlit_app.py`.
+
 La app tiene tres vistas: curva inventario-servicio, fórmula vs simulación y una vista por
 producto con simulación en vivo. Lee `outputs/` (correr `python main.py`) y, para la vista
 de producto, `data/raw/` (correr `python scripts/descargar_m5.py`). Las rutas se pueden
@@ -96,11 +100,21 @@ censurada, etc.) están explicados con un ejemplo en [docs/conceptos.md](docs/co
 - El lead time es un supuesto (M5 no lo trae).
 - Las ventas son demanda censurada: 994 productos tienen rachas de ceros que sugieren
   quiebres en la historia; se marcan, no se corrigen.
+- μ, σ, el bootstrap y el diagnóstico de dependencia usan toda la historia de calibración
+  desde la primera venta de cada producto (varios años), y el nivel por producto cambia mucho
+  (`ratio_media` p10 = 0,523, p90 = 1,679). Una ventana de calibración reciente podría
+  cambiar la brecha de la fórmula y la medida de dependencia (tendencias y cambios de nivel
+  dentro de la calibración también inflan el cociente de varianzas); no se probó.
 - Una sola tienda; no se probó que los resultados se generalicen.
 - El largo de bloque (28 días) fue elegido, no ajustado.
 - Aun con bloques, α (0,934) queda bajo la meta de 0,95.
 - No hay costo de quiebre: se muestra cuánto cuesta cada nivel de servicio, no cuál es el
   óptimo.
+
+## Próximos pasos
+
+- Probar una ventana de calibración reciente en vez de toda la historia.
+- Correr otra tienda y otros largos de bloque.
 
 ## Datos y licencia
 

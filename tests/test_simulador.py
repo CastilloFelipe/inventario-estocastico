@@ -82,3 +82,9 @@ def test_trayectoria_coincide_con_metricas_de_una_replica():
             assert (1 - perd.sum() / dem.sum() if dem.sum() else 1.0) == pytest.approx(m.fill_rate[0])
             quiebre = (perd > 0).reshape(-1, R).any(axis=1)  # ventanas completas
             assert (1 - quiebre.mean()) == pytest.approx(m.servicio_ciclo[0])
+
+
+def test_lead_time_menor_a_uno_da_error():
+    d = np.zeros((2, 10, 1), dtype=np.int64)
+    with pytest.raises(ValueError, match="lead times"):
+        simular(d, np.array([3]), 7, np.zeros((2, 2, 1), dtype=np.int64))

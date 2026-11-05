@@ -61,6 +61,8 @@ def simular(
     demanda = np.asarray(demanda)
     reps, dias, items = demanda.shape
     S = np.asarray(S, dtype=np.int64)
+    if lead_times.size and lead_times.min() < 1:
+        raise ValueError("los lead times deben ser al menos 1 día")
     max_l = int(lead_times.max()) if lead_times.size else 1
     n = max_l + 1  # tamaño del arreglo circular de pedidos en tránsito
 

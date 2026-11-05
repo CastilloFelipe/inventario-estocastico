@@ -23,7 +23,7 @@ explorar productos y la curva de la pregunta B.
 | Decisión | Valor |
 |---|---|
 | Datos | M5 (Walmart): `sales_train_evaluation.csv`, `calendar.csv`, `sell_prices.csv` |
-| Tienda | CA_1, sus 3.049 productos (3 categorías). La app permite elegir otra tienda |
+| Tienda | CA_1, sus 3.049 productos (3 categorías). La app muestra solo la tienda analizada (CA_1), porque los outputs precalculados son de una tienda; para otra: `python main.py --tienda X --salida otra_carpeta/` y apuntar `INVENTARIO_OUTPUTS` a esa carpeta |
 | Calibración / prueba | Todo excepto los últimos 364 días / últimos 364 días |
 | Política | Revisión periódica (R, S), R = 7 días (parámetro) |
 | Lead time | Aleatorio, uniforme discreto en {2, 3, 4, 5} días (parámetro) |

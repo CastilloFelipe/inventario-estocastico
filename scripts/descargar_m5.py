@@ -15,7 +15,24 @@ ARCHIVOS = {
     "sell_prices.csv": MEDIA,
     "calendar.csv": RAW,
 }
+ENCABEZADOS = {
+    "sales_train_evaluation.csv": "id,item_id",
+    "calendar.csv": "date,wm_yr_wk",
+    "sell_prices.csv": "store_id,item_id",
+}
 DESTINO = Path(__file__).resolve().parents[1] / "data" / "raw"
+
+
+def _verificar_encabezado(ruta: Path, nombre: str, base: str) -> None:
+    """Falla si la primera línea no es la esperada (puntero LFS, HTML, etc.)."""
+    with open(ruta, "rb") as f:
+        primera = f.readline().decode("utf-8", errors="replace").strip()
+    esperado = ENCABEZADOS.get(nombre)
+    if esperado and not primera.startswith(esperado):
+        raise ValueError(
+            f"contenido inválido en {nombre} (primera línea {primera[:60]!r}, se esperaba "
+            f"que empezara con {esperado!r}); puede ser un puntero de Git LFS o una página HTML"
+        )
 
 
 def descargar(nombre: str, base: str, destino: Path = DESTINO) -> bool:
@@ -30,6 +47,7 @@ def descargar(nombre: str, base: str, destino: Path = DESTINO) -> bool:
         with urllib.request.urlopen(base + nombre, timeout=60) as r, \
                 open(parcial, "wb") as f:
             shutil.copyfileobj(r, f)
+        _verificar_encabezado(parcial, nombre, base)
         parcial.replace(ruta)
     except Exception as e:
         parcial.unlink(missing_ok=True)
