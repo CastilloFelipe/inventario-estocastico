@@ -95,3 +95,19 @@ def test_semana_a_caballo_entre_calibracion_y_prueba_no_filtra_precio(raw):
     assert datos.n_calib == 18
     assert datos.precio[0] == 2.0
     assert datos.precio[1] == 6.0
+
+
+def test_extracto_conserva_los_datos(tmp_path):
+    """El extracto de la app publicada devuelve exactamente lo mismo que la carga original."""
+    from inventario.datos import cargar_extracto, guardar_extracto
+
+    raw = tmp_path / "raw"
+    escribir_m5_sintetico(raw)
+    original = cargar_tienda(raw, "CA_1", dias_prueba=7)
+    guardar_extracto(original, tmp_path / "CA_1.npz")
+    copia = cargar_extracto(tmp_path / "CA_1.npz")
+    assert copia.item_ids == original.item_ids and copia.categorias == original.categorias
+    assert (copia.fechas == original.fechas).all()
+    assert np.array_equal(copia.ventas, original.ventas) and np.array_equal(copia.dow, original.dow)
+    np.testing.assert_array_equal(copia.precio, original.precio)
+    assert copia.n_calib == original.n_calib

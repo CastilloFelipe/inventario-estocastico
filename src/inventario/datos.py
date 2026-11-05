@@ -97,3 +97,34 @@ def cargar_tienda(raw_dir: Path, tienda: str = "CA_1",
                        categorias=ventas_df["cat_id"].tolist(),
                        fechas=fechas, dow=dow, ventas=ventas,
                        precio=precio, n_calib=n_calib)
+
+
+def guardar_extracto(datos: DatosTienda, ruta: Path) -> None:
+    """Guarda una tienda ya cargada en un .npz comprimido (para la app publicada)."""
+    ruta = Path(ruta)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    tipo = np.uint16 if datos.ventas.max() < 2**16 else np.int64
+    np.savez_compressed(
+        ruta,
+        item_ids=np.array(datos.item_ids, dtype=str),
+        categorias=np.array(datos.categorias, dtype=str),
+        fechas=np.array(datos.fechas.strftime("%Y-%m-%d"), dtype=str),
+        dow=datos.dow.astype(np.int8),
+        ventas=datos.ventas.astype(tipo),
+        precio=datos.precio.astype(np.float64),
+        n_calib=np.array(datos.n_calib),
+    )
+
+
+def cargar_extracto(ruta: Path) -> DatosTienda:
+    """Lee un extracto creado con guardar_extracto."""
+    with np.load(Path(ruta), allow_pickle=False) as z:
+        return DatosTienda(
+            item_ids=[str(i) for i in z["item_ids"]],
+            categorias=[str(c) for c in z["categorias"]],
+            fechas=pd.DatetimeIndex(pd.to_datetime(z["fechas"])),
+            dow=z["dow"].astype(np.int64),
+            ventas=z["ventas"].astype(np.int64),
+            precio=z["precio"],
+            n_calib=int(z["n_calib"]),
+        )

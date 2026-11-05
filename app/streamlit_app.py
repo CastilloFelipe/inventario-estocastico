@@ -2,7 +2,9 @@
 
 Uso: streamlit run app/streamlit_app.py
 Rutas configurables con INVENTARIO_OUTPUTS (por defecto outputs/) e
-INVENTARIO_RAW (por defecto data/raw/).
+INVENTARIO_RAW (por defecto data/raw/). Si no se definen y esas carpetas no existen
+(por ejemplo, en Streamlit Community Cloud), la app usa app/datos_demo/, creada con
+scripts/exportar_demo.py.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))
 
 from inventario.analisis import Config  # noqa: E402
-from inventario.datos import cargar_tienda  # noqa: E402
+from inventario.datos import cargar_extracto, cargar_tienda  # noqa: E402
 from inventario.demanda import muestrear_demanda, muestrear_demanda_bloques, primera_venta  # noqa: E402
 from inventario.simulador import muestrear_lead_times, simular  # noqa: E402
 
@@ -31,12 +33,26 @@ REPS_APP = 200
 VISTAS = ["Curva inventario–servicio", "Fórmula vs simulación", "Producto"]
 
 
+DEMO = RAIZ / "app" / "datos_demo"
+
+
 def ruta_outputs() -> Path:
-    return Path(os.environ.get("INVENTARIO_OUTPUTS", RAIZ / "outputs"))
+    if "INVENTARIO_OUTPUTS" in os.environ:
+        return Path(os.environ["INVENTARIO_OUTPUTS"])
+    local = RAIZ / "outputs"
+    return local if (local / "pregunta_a.csv").exists() or not DEMO.exists() else DEMO
 
 
 def ruta_raw() -> Path:
     return Path(os.environ.get("INVENTARIO_RAW", RAIZ / "data" / "raw"))
+
+
+def ruta_extracto() -> Path | None:
+    """Extracto de la app publicada; solo se usa si no se pidió una carpeta de datos."""
+    if "INVENTARIO_RAW" in os.environ:
+        return None
+    ruta = DEMO / f"{TIENDA}.npz"
+    return ruta if ruta.exists() else None
 
 
 def simular_producto(historia: np.ndarray, dow_calib: np.ndarray, dow_prueba0: int,
@@ -77,6 +93,19 @@ def cargar_salida(nombre: str) -> pd.DataFrame | None:
 @st.cache_resource(show_spinner="Cargando datos M5...")
 def cargar_datos(raw: str):
     return cargar_tienda(Path(raw), TIENDA)
+
+
+@st.cache_resource(show_spinner="Cargando datos M5...")
+def cargar_datos_extracto(ruta: str):
+    return cargar_extracto(Path(ruta))
+
+
+def datos_tienda():
+    """Datos M5 completos si están; si no, el extracto de la app publicada; si no, None."""
+    if (ruta_raw() / "sales_train_evaluation.csv").exists():
+        return cargar_datos(str(ruta_raw()))
+    extracto = ruta_extracto()
+    return cargar_datos_extracto(str(extracto)) if extracto else None
 
 
 def aviso_sin_outputs() -> None:
@@ -177,9 +206,9 @@ def vista_producto() -> None:
     a = cargar_salida("pregunta_a.csv")
     if a is None:
         return aviso_sin_outputs()
-    if not (ruta_raw() / "sales_train_evaluation.csv").exists():
+    datos = datos_tienda()
+    if datos is None:
         return aviso_sin_raw()
-    datos = cargar_datos(str(ruta_raw()))
     a = a[a["item_id"].isin(datos.item_ids) & (a["clase"] != "sin_ventas")]
     busca = st.text_input("Buscar producto", placeholder="p. ej. FOODS_1_001")
     opciones = [i for i in a["item_id"] if busca.strip().lower() in i.lower()]
@@ -241,6 +270,9 @@ def main() -> None:
     st.set_page_config(page_title="Inventario estocástico", layout="wide")
     st.title("Inventario estocástico · Walmart M5 (CA_1)")
     vista = st.sidebar.radio("Vista", VISTAS)
+    st.sidebar.markdown(
+        "---\n[Código y reporte en GitHub](https://github.com/CastilloFelipe/inventario-estocastico)  \n"
+        "Datos: competencia *M5 Forecasting – Accuracy* (Kaggle), tienda CA_1.")
     {VISTAS[0]: vista_curva, VISTAS[1]: vista_resumen, VISTAS[2]: vista_producto}[vista]()
 
 
