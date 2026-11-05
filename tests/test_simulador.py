@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from scipy.stats import poisson
 
 from inventario.simulador import muestrear_lead_times, simular
@@ -54,21 +53,10 @@ def test_misma_semilla_mismo_resultado():
         assert np.array_equal(getattr(res[0], campo), getattr(res[1], campo))
 
 
-def _servicio_poisson_lt_fijo(reps=2000):
+def test_poisson_lead_time_fijo_coincide_con_teoria():
+    # λ = 4/día, R = 7, L = 3 fijo: el pedido protege R + L = 10 días
+    reps = 2000
     S = int(poisson.ppf(0.95, 4 * 10))
     d = np.random.default_rng(7).poisson(4.0, size=(reps, DIAS, 1))
     m = simular(d, np.array([S]), 7, np.full((reps, N_REV, 1), 3))
-    return S, m.servicio_ciclo[0]
-
-
-@pytest.mark.xfail(strict=True, reason="Teoría de la brief usa R+L=10 días de exposición; con pedido "
-                   "al cierre del día de revisión la exposición efectiva es R+L-1=9 (ver siguiente test)")
-def test_poisson_lead_time_fijo_coincide_con_teoria_brief():
-    S, alfa = _servicio_poisson_lt_fijo()
-    assert abs(alfa - poisson.cdf(S, 40)) < 0.02
-
-
-def test_poisson_lead_time_fijo_coincide_con_teoria_exposicion_efectiva():
-    # el pedido se emite tras vender el día t: protege los días t+1 .. t+R+L-1
-    S, alfa = _servicio_poisson_lt_fijo()
-    assert abs(alfa - poisson.cdf(S, 4 * (7 + 3 - 1))) < 0.02
+    assert abs(m.servicio_ciclo[0] - poisson.cdf(S, 40)) < 0.02

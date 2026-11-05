@@ -77,9 +77,10 @@ producto, R, distribución de lead time, semilla. Salida por producto: fill rate
 ciclo, inventario promedio (unidades). No conoce M5.
 
 Dinámica diaria (orden fijo y documentado): (1) llegan pedidos con fecha de hoy;
-(2) se atiende la demanda con el inventario disponible, lo no atendido se pierde;
-(3) si es día de revisión, se pide S − (inventario disponible + pedidos en tránsito) y se
-sortea su lead time. El inventario inicial es S. Se descarta un período de calentamiento
+(2) si es día de revisión, al inicio del día se pide S − (inventario disponible + pedidos en
+tránsito) y se sortea su lead time; (3) se atiende la demanda con el inventario disponible, lo
+no atendido se pierde. Con este orden un pedido protege exactamente R + L días, la misma
+convención que la fórmula clásica. El inventario inicial es S. Se descarta un período de calentamiento
 de 4 semanas antes de medir.
 
 ### Búsqueda del S por simulación

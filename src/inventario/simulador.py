@@ -40,8 +40,9 @@ def simular(
     demanda: `(reps, dias, items)`; S: `(items,)`; lead_times: `(reps, n_rev, items)`
     con una entrada por revisión (la k-ésima revisión ocurre en el día k * R).
 
-    Dinámica diaria: (1) llegan pedidos; (2) se vende min(inv, demanda), el resto
-    se pierde; (3) si t % R == 0, se pide max(0, S - inv - en_tránsito).
+    Dinámica diaria: (1) llegan pedidos; (2) si t % R == 0, al inicio del día se
+    pide max(0, S - inv - en_tránsito), que llega en t + L; (3) se vende
+    min(inv, demanda) y el resto se pierde. Un pedido protege exactamente R + L días.
     Inventario inicial = S. Las métricas se acumulan solo desde `calentamiento`.
     """
     demanda = np.asarray(demanda)
@@ -71,17 +72,17 @@ def simular(
         en_transito -= llega
         pipeline[:, t % n, :] = 0
 
-        # (2) ventas
-        d = demanda[:, t, :]
-        v = np.minimum(inv, d)
-        inv -= v
-
-        # (3) revisión y pedido
+        # (2) revisión y pedido al inicio del día
         if t % R == 0:
             pedido = np.maximum(0, S - inv - en_transito)
             L = lead_times[:, t // R, :]
             pipeline[idx_reps, (t + L) % n, idx_items] += pedido
             en_transito += pedido
+
+        # (3) ventas; lo no atendido se pierde
+        d = demanda[:, t, :]
+        v = np.minimum(inv, d)
+        inv -= v
 
         if t >= calentamiento:
             vendido += v
