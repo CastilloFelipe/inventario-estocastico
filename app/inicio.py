@@ -152,13 +152,15 @@ def _conclusiones(r: pd.DataFrame, b: pd.DataFrame | None, d: pd.DataFrame | Non
         mediana = d["ratio_var_10"].median()
         sobre = (d["ratio_var_10"] > 1.2).mean()
         puntos.append(
-            f"**La brecha se asocia a que la demanda tiene memoria.** En el {_pct(sobre, 0)} de los "
-            f"productos, las ventas de 10 días seguidos varían más de lo que supone la "
-            f"independencia (en la mediana, {_num(mediana)} veces). Tanto la fórmula como el "
-            f"bootstrap diario suponen días independientes.")
+            f"**La brecha se asocia a que la demanda tiene memoria** (rachas y cambios de nivel). "
+            f"En el {_pct(sobre, 0)} de los productos, las ventas de 10 días seguidos varían más de "
+            f"lo que supone la independencia (en la mediana, {_num(mediana)} veces). Tanto la "
+            f"fórmula como el bootstrap diario suponen días independientes. Parte de esa memoria "
+            f"podría venir de quiebres no registrados (ver limitaciones).")
     else:
-        puntos.append("**La brecha se asocia a que la demanda tiene memoria**: las ventas de días "
-                      "cercanos se parecen más de lo que suponen la fórmula y el bootstrap diario.")
+        puntos.append("**La brecha se asocia a que la demanda tiene memoria** (rachas y cambios de "
+                      "nivel): las ventas de días cercanos se parecen más de lo que suponen la "
+                      "fórmula y el bootstrap diario.")
     puntos.append(
         f"**El bootstrap por bloques acerca la promesa a la realidad.** Llega a "
         f"{_pct(tot['alpha_bloques'])} de servicio (cerca de {_pct(cierre, 0)} de la brecha de la "
