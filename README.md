@@ -32,6 +32,19 @@ a la vez, una forma de aprender modelos estocásticos de inventario.
 
 Detalle, tablas por clase y categoría y limitaciones: [docs/resultados.md](docs/resultados.md).
 
+## Demo
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+La app tiene tres vistas: curva inventario-servicio, fórmula vs simulación y una vista por
+producto con simulación en vivo. Lee `outputs/` (correr `python main.py`) y, para la vista
+de producto, `data/raw/` (correr `python scripts/descargar_m5.py`). Las rutas se pueden
+cambiar con `INVENTARIO_OUTPUTS` e `INVENTARIO_RAW`.
+
+![Vista de la curva inventario-servicio](docs/app_curva.png)
+
 ## Cómo reproducir
 
 Requiere Python 3.12 o superior.
@@ -57,6 +70,7 @@ src/inventario/
   politicas.py    S por fórmula y S por simulación (búsqueda binaria)
   backtest.py     reproduce la demanda real de la prueba con un S dado
   analisis.py     preguntas A y B
+app/             app Streamlit (curva, fórmula vs simulación, producto)
 main.py           corre el análisis completo y guarda outputs/
 scripts/          descarga de datos, diagnóstico de dependencia, gráfico
 tests/            pruebas con casos teóricos y datos sintéticos
