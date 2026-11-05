@@ -28,7 +28,7 @@ explorar productos y la curva de la pregunta B.
 | Política | Revisión periódica (R, S), R = 7 días (parámetro) |
 | Lead time | Aleatorio, uniforme discreto en {2, 3, 4, 5} días (parámetro) |
 | Quiebre | Ventas perdidas |
-| Meta de servicio | Fill rate 95% para la pregunta A; la curva B recorre 85%–99% |
+| Meta de servicio | Pregunta A: servicio por ciclo (α) de 95%, la métrica que promete la fórmula, para comparar con la misma vara; se reporta también el fill rate. Pregunta B: fill rate de 85% a 99% |
 | Costo de mantener | 25% anual del precio (parámetro; solo escala USD) |
 
 Fuera de alcance: varias tiendas simultáneas, pronóstico de demanda, costo de quiebre
@@ -40,7 +40,7 @@ explícito, política (s, S). Quedan como próximos pasos.
 - **Cobertura R + L:** S debe cubrir la demanda hasta la próxima revisión más el lead time.
 - **Fórmula clásica:** S = μ·(R+L) + z·σ·√(R+L), con μ y σ diarios y z según el servicio por
   ciclo objetivo. Supone demanda normal e independiente y lead time fijo (se usa su media).
-- **Servicio por ciclo (α):** % de ciclos de reposición sin quiebre. **Fill rate (β):** % de
+- **Servicio por ciclo (α):** % de ciclos de revisión (R días) sin ningún día con demanda no atendida. **Fill rate (β):** % de
   unidades demandadas atendidas.
 - **Monte Carlo con bootstrap:** se simulan muchos años posibles; cada día simulado toma la
   demanda de un día real del mismo día de la semana, elegido al azar (conserva el patrón
@@ -64,7 +64,7 @@ M5 ─► datos ─► demanda (diagnóstico) ─► politicas + simulador ─�
 | `src/inventario/datos.py` | Serie diaria por producto de una tienda, división calibración/prueba, precio por producto (último precio semanal conocido) | pandas |
 | `src/inventario/demanda.py` | Estadísticos, clase Syntetos-Boylan, ajuste normal / Poisson / binomial negativa (mejor por AIC), marca de censura sospechosa | numpy, scipy |
 | `src/inventario/simulador.py` | Simulación vectorizada (productos × réplicas) de (R, S) con ventas perdidas y lead time aleatorio; devuelve fill rate, servicio por ciclo e inventario promedio | numpy |
-| `src/inventario/politicas.py` | S por fórmula; S por simulación (búsqueda binaria vectorizada del menor S entero que cumple la meta) | simulador |
+| `src/inventario/politicas.py` | S por fórmula; S por simulación (búsqueda binaria vectorizada del menor S entero que cumple una meta de α o de fill rate) | simulador |
 | `src/inventario/backtest.py` | Reproduce la demanda real del período de prueba con un S dado (lead time aleatorio, varias réplicas solo sobre el lead time) | simulador |
 | `src/inventario/analisis.py` | Tablas de la pregunta A por clase y categoría; curva de la pregunta B | todos los anteriores |
 | `app/streamlit_app.py` | Explorar producto (demanda, clase, distribución, simulación con S ajustable) y curva B | analisis |
@@ -84,16 +84,16 @@ de 4 semanas antes de medir.
 
 ### Búsqueda del S por simulación
 
-El fill rate es no decreciente en S, por eso se usa búsqueda binaria sobre S entero entre 0 y
+El fill rate y el servicio por ciclo son no decrecientes en S, por eso se usa búsqueda binaria sobre S entero entre 0 y
 un tope (p. ej. el S de la fórmula al 99,9% más un margen), para todos los productos a la vez.
 Se usan números aleatorios comunes (misma semilla para cada S) para que la comparación entre
 valores de S sea estable.
 
 ## 5. Resultados esperados
 
-- **Pregunta A:** por clase de demanda y por categoría: servicio prometido (95%) vs logrado en
-  la prueba (fill rate y α), para la fórmula y para la simulación, e inventario en USD de cada
-  política.
+- **Pregunta A:** por clase de demanda y por categoría: α prometido (95%) vs α logrado en la
+  prueba, para la fórmula (z = 1,645) y para el S calibrado por simulación con meta α = 95%;
+  además el fill rate logrado y el inventario en USD de cada política.
 - **Pregunta B:** para metas de 85% a 99%, inventario total en USD con S calibrado por
   simulación, y el fill rate efectivamente logrado en la prueba.
 - `docs/resultados.md`: conclusiones en lenguaje de negocio, escritas con los números reales.
