@@ -39,32 +39,6 @@ def ruta_raw() -> Path:
     return Path(os.environ.get("INVENTARIO_RAW", RAIZ / "data" / "raw"))
 
 
-def trayectoria(demanda: np.ndarray, S: int, R: int, lead_times: np.ndarray,
-                calentamiento: int) -> tuple[np.ndarray, np.ndarray]:
-    """Inventario diario al cierre y días con quiebre de una réplica (misma dinámica que `simular`).
-
-    demanda: (dias,); lead_times: (n_rev,). Devuelve solo los días posteriores al calentamiento.
-    """
-    n = int(lead_times.max()) + 1
-    inv, en_transito = int(S), 0
-    pipeline = np.zeros(n, dtype=np.int64)
-    inventario, quiebre = [], []
-    for t in range(len(demanda)):
-        llega = pipeline[t % n]
-        inv += llega
-        en_transito -= llega
-        pipeline[t % n] = 0
-        if t % R == 0:
-            pedido = max(0, S - inv - en_transito)
-            pipeline[(t + int(lead_times[t // R])) % n] += pedido
-            en_transito += pedido
-        v = min(inv, int(demanda[t]))
-        inv -= v
-        inventario.append(inv)
-        quiebre.append(demanda[t] > v)
-    return np.array(inventario)[calentamiento:], np.array(quiebre)[calentamiento:]
-
-
 def simular_producto(historia: np.ndarray, dow_calib: np.ndarray, dow_prueba0: int,
                      S: int, metodo: str, j: int, cfg: Config) -> dict:
     """Simulación en vivo de un producto: métricas con `reps` réplicas y una trayectoria."""
@@ -81,8 +55,9 @@ def simular_producto(historia: np.ndarray, dow_calib: np.ndarray, dow_prueba0: i
         dem = muestrear_demanda(rng, historia, dow_calib, dow_sim, cfg.reps, inicio)
     n_rev = -(-n // cfg.R) + 1
     lt = muestrear_lead_times(rng, cfg.reps, n_rev, 1, cfg.lead_times)
-    m = simular(dem, np.array([S]), cfg.R, lt, calentamiento=cfg.calentamiento)
-    inv, quiebre = trayectoria(dem[0, :, 0], S, cfg.R, lt[0, :, 0], cfg.calentamiento)
+    m, tray = simular(dem, np.array([S]), cfg.R, lt, calentamiento=cfg.calentamiento,
+                      devolver_trayectoria=True)
+    inv, quiebre = tray.inventario[:, 0], tray.perdidas[:, 0] > 0
     return {"alpha": float(m.servicio_ciclo[0]), "fill": float(m.fill_rate[0]),
             "inv_prom": float(m.inventario_prom[0]), "inv": inv, "quiebre": quiebre}
 
@@ -188,12 +163,13 @@ def vista_resumen() -> None:
                   annotation_text="Meta 0,95", annotation_position="top left")
     layout_base(fig, "Grupo", "α logrado (media)")
     fig.update_layout(barmode="group")
-    fig.update_yaxes(range=[0.7, 1.02])
+    piso = min(tabla["α logrado"].min(), 0.95)
+    fig.update_yaxes(range=[max(0.0, np.floor((piso - 0.03) * 20) / 20), 1.02])
     st.plotly_chart(fig, width="stretch")
     st.dataframe(tabla, hide_index=True, width="stretch", column_config={
         "α logrado": st.column_config.NumberColumn(format="%.3f"),
         "Fill ponderado": st.column_config.NumberColumn(format="%.3f"),
-        "Inventario (USD)": st.column_config.NumberColumn(format="%,.0f")})
+        "Inventario (USD)": st.column_config.NumberColumn(format="%.0f")})
 
 
 def vista_producto() -> None:
@@ -226,7 +202,7 @@ def vista_producto() -> None:
     c = st.columns(4)
     c[0].metric("Clase", str(f["clase"]).capitalize())
     c[1].metric("Mejor distribución", str(f["mejor_dist"]).replace("_", " "))
-    c[2].metric("Censura sospechosa", "Sí" if f["censura"] is True or f["censura"] == True else "No")  # noqa: E712
+    c[2].metric("Censura sospechosa", "Sí" if bool(f["censura"]) else "No")
     c[3].metric("Categoría", str(f["categoria"]))
     s = st.columns(3)
     for col, (p, nombre) in zip(s, POLITICAS):
@@ -257,7 +233,8 @@ def vista_producto() -> None:
     layout_base(fig, "Día de la simulación", "Inventario (unidades)")
     st.plotly_chart(fig, width="stretch")
     st.caption(f"Una réplica de {REPS_APP}; {int(q.sum())} días con quiebre de {len(q)}. "
-               "Semilla fija: 2026.")
+               "Semilla fija: 2026. Las cifras en vivo usan un flujo aleatorio independiente del análisis: "
+               "no coinciden exactamente con `pregunta_a`.")
 
 
 def main() -> None:

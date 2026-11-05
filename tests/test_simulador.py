@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 from scipy.stats import poisson
 
@@ -60,3 +61,24 @@ def test_poisson_lead_time_fijo_coincide_con_teoria():
     d = np.random.default_rng(7).poisson(4.0, size=(reps, DIAS, 1))
     m = simular(d, np.array([S]), 7, np.full((reps, N_REV, 1), 3))
     assert abs(m.servicio_ciclo[0] - poisson.cdf(S, 40)) < 0.02
+
+
+def test_trayectoria_coincide_con_metricas_de_una_replica():
+    from inventario.simulador import muestrear_lead_times, simular
+    R, cal = 7, 28
+    for seed in range(4):
+        for S in (0, 5, 15, 40):
+            rng = np.random.default_rng(seed)
+            d = rng.poisson(3.0, size=(1, 140, 1))
+            lt = muestrear_lead_times(rng, 1, N_REV, 1)
+            base = simular(d, np.array([S]), R, lt, calentamiento=cal)
+            m, tr = simular(d, np.array([S]), R, lt, calentamiento=cal,
+                            devolver_trayectoria=True)
+            assert m.fill_rate == base.fill_rate and m.inventario_prom == base.inventario_prom
+            inv, perd = tr.inventario[:, 0], tr.perdidas[:, 0]
+            assert len(inv) == 140 - cal
+            assert inv.mean() == m.inventario_prom[0]
+            dem = d[0, cal:, 0]
+            assert (1 - perd.sum() / dem.sum() if dem.sum() else 1.0) == pytest.approx(m.fill_rate[0])
+            quiebre = (perd > 0).reshape(-1, R).any(axis=1)  # ventanas completas
+            assert (1 - quiebre.mean()) == pytest.approx(m.servicio_ciclo[0])

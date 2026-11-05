@@ -99,18 +99,3 @@ def test_sin_raw_muestra_comando(entorno):
     at = _app("Producto")
     assert not at.exception
     assert any("python scripts/descargar_m5.py" in c.value for c in at.code)
-
-
-def test_trayectoria_coincide_con_simular():
-    # el módulo llama a main() al importarse: se ejecuta solo la parte previa a la carga
-    src = open(APP).read().split("# ---------- carga con caché")[0]
-    ns = {"__file__": APP}
-    exec(compile(src, APP, "exec"), ns)
-    from inventario.simulador import muestrear_lead_times, simular
-    rng = np.random.default_rng(1)
-    dem = rng.poisson(3, size=(1, 120, 1))
-    lt = muestrear_lead_times(rng, 1, 20, 1)
-    inv, q = ns["trayectoria"](dem[0, :, 0], 15, 7, lt[0, :, 0], 28)
-    m = simular(dem, np.array([15]), 7, lt, calentamiento=28)
-    assert inv.mean() == pytest.approx(m.inventario_prom[0])
-    assert len(inv) == 92 and q.dtype == bool
