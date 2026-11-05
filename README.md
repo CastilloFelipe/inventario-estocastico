@@ -9,16 +9,19 @@ Monte Carlo, la prueba con un año de demanda que no se usó para calibrar y tra
 servicio logrado a dólares de inventario. Es un proyecto de portafolio para supply chain y,
 a la vez, una forma de aprender modelos estocásticos de inventario.
 
-## Resultados clave (tienda CA_1, 3.039 productos analizados)
+## Resultados clave (tienda CA_1, 3.039 productos analizados; 10 sin ventas excluidos)
 
 - **La promesa de 95% no se cumple.** Con meta de servicio por ciclo α = 95%, la fórmula
   clásica logra en promedio 0,905 y la simulación con bootstrap diario 0,894.
-- **La causa principal es suponer días independientes, no la forma normal.** La simulación
-  que usa la distribución real (sin suponer normalidad) falla igual que la fórmula. En
-  cambio, la venta de 10 días varía en mediana 1,94 veces lo que supone la independencia, y
-  la brecha crece con esa dependencia: la fórmula logra 0,954 en los productos casi
-  independientes y 0,853 en los más dependientes.
-- **Simular con bloques de 28 días consecutivos cierra la mayor parte de la brecha:** α
+- **La brecha se asocia a la dependencia entre días más que a la forma normal.** La
+  simulación que usa la distribución real (sin suponer normalidad) falla igual que la
+  fórmula. La venta de 10 días varía en mediana 1,94 veces lo que supone la independencia,
+  y la fórmula logra 0,954 en los productos casi independientes y 0,853 en los más
+  dependientes. Parte de esa dependencia puede venir de quiebres en la historia, y los
+  cambios de nivel por producto también bajan el servicio; ambos confusores se analizan en
+  los resultados.
+- **Simular con bloques de 28 días consecutivos cierra cerca de dos tercios de la brecha de la
+  fórmula:** α
   0,934 y fill rate ponderado 0,963, a cambio de 32% más inventario que la simulación diaria
   (197.837 vs 150.375 USD).
 - **Con bloques, la meta escrita se parece a la lograda.** Pidiendo 95% de fill rate, la

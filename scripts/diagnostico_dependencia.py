@@ -7,14 +7,18 @@ Mide, con la historia de calibración de cada producto (desde su primera venta):
   altos (o bajos) tienden a venir juntos y el riesgo de 10 días es mayor que
   el que supone la fórmula clásica.
 - `autocorr_1`: autocorrelación de orden 1 de la serie diaria.
-- `ratio_media`: media diaria en la prueba / media diaria en la calibración.
-  Cerca de 1 indica que no hay deriva fuerte de nivel entre ambos períodos.
+- `ratio_media`: media diaria en la prueba / media diaria de la historia de
+  calibración desde la primera venta. Cerca de 1 indica que el nivel no se
+  movió entre ambos períodos.
 
 Solo entran productos con al menos 400 días desde su primera venta y varianza
 diaria positiva. Guarda `outputs/diagnostico.csv` e imprime medianas y
 percentiles. Si existe `outputs/pregunta_a.csv` (de main.py), cruza además el
 α logrado por cada política según el tramo de `ratio_var_10` y lo guarda en
-`outputs/diagnostico_cruce.csv`.
+`outputs/diagnostico_cruce.csv`. Para revisar dos explicaciones alternativas
+(rachas de ceros por quiebres y cambios de nivel por producto), repite ese cruce
+separando por la marca de censura y por tercil de |log ratio_media| dentro de
+cada tramo, y lo guarda en `outputs/diagnostico_confusores.csv`.
 
 Uso: python scripts/diagnostico_dependencia.py --tienda CA_1
 """
@@ -75,6 +79,41 @@ def cruzar(diag: pd.DataFrame, pregunta_a: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _agg(m: pd.DataFrame, por: list[str]) -> pd.DataFrame:
+    cols = {"n": ("item_id", "size"),
+            "mediana_ratio_var_10": ("ratio_var_10", "median"),
+            "mediana_autocorr_1": ("autocorr_1", "median")}
+    cols.update({f"alpha_{p}": (f"alpha_{p}", "mean") for p in POLITICAS})
+    return m.groupby(por, observed=True).agg(**cols).reset_index()
+
+
+def cruzar_confusores(diag: pd.DataFrame, pregunta_a: pd.DataFrame) -> pd.DataFrame:
+    """α medio por política según tramo y un posible confusor.
+
+    `factor` = "censura": `nivel` es la marca de censura sospechosa (True/False).
+    `factor` = "deriva": `nivel` es el tercil (bajo/medio/alto) de
+    |log ratio_media| calculado dentro de cada tramo de `ratio_var_10`.
+    `tramo` = "todos" resume el nivel sin separar por tramo.
+    """
+    m = diag.merge(pregunta_a, on=["item_id", "categoria"])
+    m["tramo"] = pd.cut(m["ratio_var_10"], TRAMOS).astype(str)
+    m["censura"] = m["censura"].astype(str)
+    with np.errstate(divide="ignore"):  # ratio_media 0 -> deriva infinita (alta)
+        m["deriva"] = np.abs(np.log(m["ratio_media"].to_numpy(dtype=float)))
+    pct = m.groupby("tramo")["deriva"].rank(pct=True, method="first")
+    m["deriva"] = pd.cut(pct, [0, 1 / 3, 2 / 3, 1], labels=["bajo", "medio", "alto"])
+    partes = []
+    for factor in ("censura", "deriva"):
+        t = _agg(m, [factor]).assign(tramo="todos")
+        partes.append(pd.concat([t, _agg(m, [factor, "tramo"])])
+                      .rename(columns={factor: "nivel"}).assign(factor=factor))
+    out = pd.concat(partes, ignore_index=True)
+    out["nivel"] = out["nivel"].astype(str)
+    orden = ["factor", "nivel", "tramo", "n", "mediana_ratio_var_10",
+             "mediana_autocorr_1"] + [f"alpha_{p}" for p in POLITICAS]
+    return out[orden]
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--tienda", default="CA_1")
@@ -107,6 +146,11 @@ def main(argv: list[str] | None = None) -> None:
         print("\nα y fill logrados en la prueba según ratio_var_10:")
         print(cruce.round(3).to_string(index=False))
         print(f"Archivo: {args.salida / 'diagnostico_cruce.csv'}")
+        conf = cruzar_confusores(d, pd.read_csv(ruta_a))
+        conf.to_csv(args.salida / "diagnostico_confusores.csv", index=False)
+        print("\nMismo cruce separando por censura y por deriva de nivel:")
+        print(conf.round(3).to_string(index=False))
+        print(f"Archivo: {args.salida / 'diagnostico_confusores.csv'}")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 Todas las cifras de este documento salen de los archivos que generan `main.py` y
 `scripts/diagnostico_dependencia.py` (`outputs/pregunta_a.csv`, `outputs/resumen_a.csv`,
-`outputs/curva_b.csv`, `outputs/diagnostico.csv`, `outputs/diagnostico_cruce.csv`). Los
+`outputs/curva_b.csv` y los `outputs/diagnostico*.csv`). Los
 decimales van con coma. Si un concepto no te suena (α, fill rate, bootstrap), está
 explicado con un ejemplo en [conceptos.md](conceptos.md).
 
@@ -87,20 +87,21 @@ El fill rate de las tablas es el ponderado por las unidades demandadas en la pru
 (`fill_pond_*`): responde "de cada 100 unidades que pidieron los clientes, cuántas se
 vendieron".
 
-## El hallazgo principal: el problema es suponer días independientes
+## El hallazgo principal: la brecha se asocia a la dependencia entre días
 
-La intuición habitual es que la fórmula falla porque la demanda real no es normal (el 72% de los
-productos son intermitentes: venden pocos días y en cantidades chicas). Los
-datos dicen otra cosa:
+La intuición habitual es que la fórmula falla porque la demanda real no es normal (el 72% de
+los productos son intermitentes: venden pocos días y en cantidades chicas). Los datos apuntan
+a otra parte, aunque con dos explicaciones alternativas que no se pueden descartar del todo:
 
 1. **Quitar el supuesto de normalidad no ayuda.** El bootstrap diario usa la distribución
    real de cada producto, sin suponer ninguna forma, y logra lo mismo que la fórmula
    (0,894 vs 0,905). Lo que ambos comparten es suponer que cada día es independiente del
    anterior.
-2. **La demanda no se movió de nivel.** La mediana de media diaria en la prueba dividida por
-   la media en la calibración es 0,978. A nivel de producto sí hay dispersión (percentil 10:
-   0,523; percentil 90: 1,679), pero no hay un desplazamiento general que explique la
-   brecha.
+2. **No hay deriva promedio, pero sí mucha dispersión por producto.** La mediana de la media
+   diaria en la prueba dividida por la media de la historia (desde la primera venta) es
+   0,978: la tienda en conjunto no subió ni bajó. Pero producto a producto el cambio es
+   grande (percentil 10: 0,523; percentil 90: 1,679), y eso no se descarta como causa (ver
+   el punto 5).
 3. **Los días no son independientes.** En 2.797 productos con al menos 400 días de historia,
    la varianza de la venta de 10 días es, en mediana, 1,94 veces lo que predice la suma de
    10 días independientes (percentil 25: 1,342; percentil 75: 2,905). El 82,8% de los
@@ -108,8 +109,8 @@ datos dicen otra cosa:
    casi siempre positiva (mediana 0,141; positiva en el 93,3% de los productos). En palabras
    de negocio: los días buenos vienen en rachas, y en una racha la venta de una semana es
    más variable de lo que la fórmula supone.
-4. **La brecha crece justo con esa dependencia.** Agrupando los productos según ese
-   cociente de varianzas:
+4. **La brecha crece con esa dependencia.** Agrupando los productos según ese cociente de
+   varianzas:
 
 | Varianza de 10 días / (10 × varianza diaria) | Productos | α fórmula | α bootstrap diario | α bloques |
 |---|---|---|---|---|
@@ -122,10 +123,52 @@ Donde los días son casi independientes, la fórmula cumple su promesa (0,954). 
 la dependencia crece, la fórmula y el bootstrap diario caen hasta 0,85; el bootstrap por
 bloques se mantiene alrededor de 0,94 en todos los tramos.
 
-**Conclusión honesta:** suponer días independientes explica la mayor parte de la brecha.
-Copiar bloques de 28 días la cierra en gran parte (de 0,905 a 0,934), a cambio de más
-inventario. Aun así queda bajo 0,95, así que hay algo más que este modelo no captura (ver
-limitaciones). Esto se observa en una sola tienda; no se probó que se generalice.
+5. **Dos confusores posibles.** La dependencia medida puede venir en parte de otras cosas:
+   - **Quiebres en la historia.** Una racha de ceros por falta de stock también se ve como
+     "días parecidos seguidos". Los productos marcados con censura sospechosa tienen más
+     dependencia medida (mediana del cociente 2,638 y autocorrelación 0,252, contra 1,644 y
+     0,094 en los no marcados). Sin embargo, la caída de la fórmula se mantiene, e incluso
+     es mayor, en los productos **sin** marca de censura (ver tabla).
+   - **Cambios de nivel por producto.** Separando cada tramo en tercios según cuánto cambió
+     la media del producto entre calibración y prueba (|log ratio_media|), el tercio que
+     más cambió logra un α mucho menor con las tres políticas, también con bloques. Además,
+     copiar bloques de 28 días mete en la simulación diferencias de nivel entre bloques, lo
+     que también ayuda a cubrir esos cambios; no se puede separar cuánto de la mejora viene
+     de las rachas y cuánto de eso.
+
+α logrado según el tramo de dependencia, separando por censura y por cambio de nivel
+(`outputs/diagnostico_confusores.csv`):
+
+| Grupo | Tramo | Productos | α fórmula | α bootstrap diario | α bloques |
+|---|---|---|---|---|---|
+| Sin censura | Hasta 1,2 | 454 | 0,954 | 0,941 | 0,941 |
+| Sin censura | 1,2 a 2 | 731 | 0,929 | 0,919 | 0,940 |
+| Sin censura | 2 a 3 | 375 | 0,892 | 0,883 | 0,936 |
+| Sin censura | Más de 3 | 269 | 0,785 | 0,779 | 0,909 |
+| Con censura | Hasta 1,2 | 28 | 0,949 | 0,947 | 0,945 |
+| Con censura | 1,2 a 2 | 240 | 0,927 | 0,917 | 0,938 |
+| Con censura | 2 a 3 | 320 | 0,899 | 0,890 | 0,937 |
+| Con censura | Más de 3 | 380 | 0,901 | 0,894 | 0,957 |
+| Cambio de nivel bajo | Hasta 1,2 | 160 | 0,970 | 0,960 | 0,958 |
+| Cambio de nivel bajo | Más de 3 | 216 | 0,912 | 0,905 | 0,973 |
+| Cambio de nivel alto | Hasta 1,2 | 161 | 0,926 | 0,911 | 0,910 |
+| Cambio de nivel alto | Más de 3 | 217 | 0,775 | 0,769 | 0,881 |
+
+(El archivo trae también los tramos intermedios y el tercio medio de cambio de nivel.)
+
+Leído en conjunto: incluso entre los productos cuyo nivel casi no cambió, la fórmula baja
+de 0,970 a 0,912 al pasar de días casi independientes a muy dependientes, mientras que los
+bloques se mantienen (0,958 a 0,973). Y a igual dependencia, los productos que más cambiaron
+de nivel pierden entre 4,4 y 13,7 puntos de α con la fórmula y entre 4,8 y 9,2 con
+bloques.
+
+**Conclusión honesta:** la brecha de la fórmula **es consistente con** el supuesto de días
+independientes y **se asocia** a la dependencia medida, que persiste aun en productos sin
+censura sospechosa y con poco cambio de nivel. Los cambios de nivel por producto son una
+segunda causa importante, que ninguna de las tres políticas cubre bien. Copiar bloques de
+28 días cierra cerca de dos tercios de la brecha de la fórmula (de 0,905 a 0,934, con meta
+0,95), a cambio de más inventario. Esto se observa en una sola tienda; no se probó que se
+generalice.
 
 ## Pregunta B: cuánto inventario cuesta el servicio
 
@@ -198,3 +241,4 @@ muy improbable.
   es el nivel óptimo; para eso hace falta el margen perdido por unidad no vendida.
 - **El origen de la dependencia no está identificado.** Promociones, clima, eventos o los
   propios quiebres (rachas de ceros) pueden generarla; este análisis la mide, no la explica.
+  Tampoco separa del todo su efecto del de los cambios de nivel por producto.

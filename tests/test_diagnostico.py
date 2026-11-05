@@ -47,3 +47,23 @@ def test_cruzar_agrupa_por_tramo():
     c = diag.cruzar(diag_df, a)
     assert c["n"].tolist() == [1, 1, 1]
     assert c["alpha_formula"].tolist() == [0.9, 0.8, 0.7]
+
+
+def test_cruzar_confusores_separa_por_censura_y_deriva():
+    n = 6
+    diag_df = pd.DataFrame({"item_id": list("abcdef"), "categoria": ["X"] * n,
+                            "ratio_var_10": [1.0] * 3 + [5.0] * 3,
+                            "autocorr_1": [0.0] * n,
+                            "ratio_media": [1.0, 1.5, 0.0, 1.0, 0.5, 3.0]})
+    a = pd.DataFrame({"item_id": list("abcdef"), "categoria": ["X"] * n,
+                      "censura": [False, True, False, True, False, True],
+                      **{f"alpha_{p}": [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
+                         for p in diag.POLITICAS}})
+    c = diag.cruzar_confusores(diag_df, a)
+    cen = c[(c["factor"] == "censura") & (c["tramo"] == "todos")].set_index("nivel")
+    assert cen.loc["True", "n"] == 3 and cen.loc["False", "n"] == 3
+    der = c[(c["factor"] == "deriva") & (c["tramo"] != "todos")]
+    assert der["n"].tolist() == [1] * 6  # un producto por tercil en cada tramo
+    # en el tramo bajo: |log| 0 (a) < log 1,5 (b) < inf (c, ratio 0)
+    bajo = der[der["tramo"] == "(0.0, 1.2]"].set_index("nivel")["alpha_formula"]
+    assert bajo.to_dict() == {"bajo": 0.9, "medio": 0.8, "alto": 0.7}

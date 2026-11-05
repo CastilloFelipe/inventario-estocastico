@@ -154,7 +154,7 @@ juntos: una promoción, una ola de calor, el día de pago. Si el detergente vend
 algo más probable que mañana venda más de 4. Eso es **autocorrelación**.
 
 Cuando hay rachas, la venta de una semana completa varía más de lo que predicen los días
-sueltos. El **bootstrap por bloques** lo arregla copiando tramos de 28 días consecutivos de
+sueltos. El **bootstrap por bloques** lo reduce copiando tramos de 28 días consecutivos de
 la historia (en vez de días sueltos), así las rachas reales quedan dentro de la simulación.
 
 **Fórmula.** Con días independientes, Var(suma de n días) = n·σ². Una forma simple de medir
@@ -169,9 +169,10 @@ detergente, si su cociente fuera 1,94, la desviación de los 10,5 días pasaría
 La **autocorrelación de orden 1** es la correlación entre la venta de un día y la del día
 siguiente: 0 sin dependencia, cercana a 1 con mucha.
 
-**En una entrevista:** "Descubrí que la fórmula fallaba no por la forma de la demanda sino
-porque los días vienen en rachas; simulando con bloques de días reales consecutivos el
-servicio subió de 0,905 a 0,934, más cerca de la meta, aunque con más inventario."
+**En una entrevista:** "La falla de la fórmula se asociaba más a que los días vienen en
+rachas que a la forma de la demanda; simulando con bloques de días reales consecutivos el
+servicio subió de 0,905 a 0,934, más cerca de la meta, aunque con más inventario. Parte de
+esas rachas podría venir de quiebres o de cambios de nivel, y eso lo declaro."
 
 ## 10. Calibración vs prueba
 
