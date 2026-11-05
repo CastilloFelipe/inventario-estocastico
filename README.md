@@ -45,7 +45,15 @@ y luego `INVENTARIO_OUTPUTS=otra_carpeta streamlit run app/streamlit_app.py`.
 La app tiene tres vistas: curva inventario-servicio, fórmula vs simulación y una vista por
 producto con simulación en vivo. Lee `outputs/` (correr `python main.py`) y, para la vista
 de producto, `data/raw/` (correr `python scripts/descargar_m5.py`). Las rutas se pueden
-cambiar con `INVENTARIO_OUTPUTS` e `INVENTARIO_RAW`.
+cambiar con `INVENTARIO_OUTPUTS` e `INVENTARIO_RAW`. Si esas carpetas no existen, usa
+`app/datos_demo/` (3 MB: los resultados y un extracto de CA_1), así que funciona recién
+clonada y en Streamlit Community Cloud. Para regenerar esa carpeta:
+`python scripts/exportar_demo.py`.
+
+**Publicarla en Streamlit Community Cloud:** en [share.streamlit.io](https://share.streamlit.io)
+→ *Create app* → *Deploy a public app from GitHub* → repositorio
+`CastilloFelipe/inventario-estocastico`, rama `main`, archivo `app/streamlit_app.py`,
+Python 3.12.
 
 ![Vista de la curva inventario-servicio](docs/app_curva.png)
 
@@ -119,10 +127,11 @@ censurada, etc.) están explicados con un ejemplo en [docs/conceptos.md](docs/co
 ## Datos y licencia
 
 Datos: competencia de Kaggle [M5 Forecasting - Accuracy](https://www.kaggle.com/competitions/m5-forecasting-accuracy)
-(Walmart, vía la Universidad de Nicosia). Los datos **no se redistribuyen** en este
-repositorio: `scripts/descargar_m5.py` los baja (desde un espejo público en GitHub) a
-`data/raw/`, que no se versiona. Su uso
-está sujeto a las reglas de la competencia.
+(Walmart, vía la Universidad de Nicosia). Los archivos completos **no se redistribuyen**:
+`scripts/descargar_m5.py` los baja (desde un espejo público en GitHub) a `data/raw/`, que no
+se versiona. La única excepción es `app/datos_demo/CA_1.npz`, un extracto con las ventas
+diarias y precios de la tienda CA_1 que la app publicada necesita, incluido con fines de
+demostración y citando la fuente. Su uso está sujeto a las reglas de la competencia.
 
 Código bajo licencia [MIT](LICENSE). Autor: Felipe Castillo, estudiante de Ingeniería Civil
 Industrial, Universidad del Desarrollo (Santiago, Chile).
