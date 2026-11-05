@@ -76,11 +76,18 @@ def cargar_tienda(raw_dir: Path, tienda: str = "CA_1",
         raise ValueError(
             f"dias_prueba={dias_prueba} deja sin calibración ({len(cols_d)} días)")
 
-    # Precio: último valor conocido en semanas de días de calibración
-    semanas_calib = cal["wm_yr_wk"].iloc[:n_calib].unique()
-    precios = pd.read_csv(raw_dir / "sell_prices.csv")
-    precios = precios[(precios["store_id"] == tienda)
-                      & precios["wm_yr_wk"].isin(semanas_calib)]
+    # Precio: último valor conocido en semanas cuyos días son TODOS de
+    # calibración (una semana a caballo con la prueba se excluye: fuga).
+    semanas_calib = np.setdiff1d(cal["wm_yr_wk"].iloc[:n_calib].unique(),
+                                 cal["wm_yr_wk"].iloc[n_calib:].unique())
+    tipos_p = {"store_id": "category", "item_id": "category",
+               "wm_yr_wk": np.int32, "sell_price": np.float32}
+    bloques = []
+    for b in pd.read_csv(raw_dir / "sell_prices.csv", dtype=tipos_p,
+                         chunksize=500_000):
+        b = b[(b["store_id"] == tienda) & b["wm_yr_wk"].isin(semanas_calib)]
+        bloques.append(b.astype({"store_id": str, "item_id": str}))
+    precios = pd.concat(bloques, ignore_index=True)
     ultimo = (precios.sort_values("wm_yr_wk")
               .groupby("item_id")["sell_price"].last())
     item_ids = ventas_df["item_id"].tolist()

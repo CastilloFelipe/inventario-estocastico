@@ -85,3 +85,13 @@ def test_tienda_inexistente_da_error_claro(raw):
     d, _ = raw
     with pytest.raises(ValueError, match="ZZ_9"):
         cargar_tienda(d, "ZZ_9", dias_prueba=7)
+
+
+def test_semana_a_caballo_entre_calibracion_y_prueba_no_filtra_precio(raw):
+    d, _ = raw
+    # dias_prueba=10: calibración = días 1-18; la semana 2 (días 15-21) queda
+    # partida y su precio (3.0) no debe usarse; el último válido es el de la semana 1.
+    datos = cargar_tienda(d, dias_prueba=10)
+    assert datos.n_calib == 18
+    assert datos.precio[0] == 2.0
+    assert datos.precio[1] == 6.0
