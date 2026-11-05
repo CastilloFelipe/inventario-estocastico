@@ -1,0 +1,107 @@
+"""Simulador vectorizado de inventario con política de revisión periódica (R, S).
+
+Ventas perdidas, lead time aleatorio por pedido. No depende de ningún conjunto
+de datos: recibe demanda, niveles S y lead times ya muestreados.
+"""
+from dataclasses import dataclass
+
+import numpy as np
+
+
+@dataclass
+class Metricas:
+    """Métricas por ítem, todas de forma `(items,)`."""
+
+    fill_rate: np.ndarray
+    servicio_ciclo: np.ndarray
+    inventario_prom: np.ndarray
+
+
+def muestrear_lead_times(
+    rng: np.random.Generator,
+    reps: int,
+    n_revisiones: int,
+    items: int,
+    valores: tuple[int, ...] = (2, 3, 4, 5),
+) -> np.ndarray:
+    """Lead times uniformes discretos, forma `(reps, n_revisiones, items)`."""
+    return rng.choice(np.asarray(valores, dtype=np.int64), size=(reps, n_revisiones, items))
+
+
+def simular(
+    demanda: np.ndarray,
+    S: np.ndarray,
+    R: int,
+    lead_times: np.ndarray,
+    calentamiento: int = 28,
+) -> Metricas:
+    """Simula la política (R, S) y devuelve métricas por ítem.
+
+    demanda: `(reps, dias, items)`; S: `(items,)`; lead_times: `(reps, n_rev, items)`
+    con una entrada por revisión (la k-ésima revisión ocurre en el día k * R).
+
+    Dinámica diaria: (1) llegan pedidos; (2) se vende min(inv, demanda), el resto
+    se pierde; (3) si t % R == 0, se pide max(0, S - inv - en_tránsito).
+    Inventario inicial = S. Las métricas se acumulan solo desde `calentamiento`.
+    """
+    demanda = np.asarray(demanda)
+    reps, dias, items = demanda.shape
+    S = np.asarray(S, dtype=np.int64)
+    max_l = int(lead_times.max()) if lead_times.size else 1
+    n = max_l + 1  # tamaño del arreglo circular de pedidos en tránsito
+
+    inv = np.broadcast_to(S, (reps, items)).copy()
+    pipeline = np.zeros((reps, n, items), dtype=np.int64)
+    en_transito = np.zeros((reps, items), dtype=np.int64)
+    idx_reps = np.arange(reps)[:, None]
+    idx_items = np.arange(items)[None, :]
+
+    vendido = np.zeros((reps, items))
+    demandado = np.zeros((reps, items))
+    suma_inv = np.zeros((reps, items))
+    dias_medidos = 0
+    perdida_ventana = np.zeros((reps, items), dtype=bool)
+    ventanas_ok = np.zeros((reps, items))
+    n_ventanas = 0
+
+    for t in range(dias):
+        # (1) llegadas
+        llega = pipeline[:, t % n, :]
+        inv += llega
+        en_transito -= llega
+        pipeline[:, t % n, :] = 0
+
+        # (2) ventas
+        d = demanda[:, t, :]
+        v = np.minimum(inv, d)
+        inv -= v
+
+        # (3) revisión y pedido
+        if t % R == 0:
+            pedido = np.maximum(0, S - inv - en_transito)
+            L = lead_times[:, t // R, :]
+            pipeline[idx_reps, (t + L) % n, idx_items] += pedido
+            en_transito += pedido
+
+        if t >= calentamiento:
+            vendido += v
+            demandado += d
+            suma_inv += inv
+            dias_medidos += 1
+
+        # ventanas [k*R, (k+1)*R) completas que empiezan tras el calentamiento
+        ini = t - t % R
+        if ini >= calentamiento:
+            if t % R == 0:
+                perdida_ventana[:] = False
+            perdida_ventana |= d > v
+            if t % R == R - 1:
+                ventanas_ok += ~perdida_ventana
+                n_ventanas += 1
+
+    vend = vendido.sum(axis=0)
+    dem = demandado.sum(axis=0)
+    fill = np.where(dem > 0, vend / np.where(dem > 0, dem, 1), 1.0)
+    alfa = ventanas_ok.mean(axis=0) / n_ventanas if n_ventanas else np.ones(items)
+    inv_prom = (suma_inv / max(dias_medidos, 1)).mean(axis=0)
+    return Metricas(fill_rate=fill, servicio_ciclo=alfa, inventario_prom=inv_prom)
