@@ -1,6 +1,7 @@
 # Inventario estocástico con demanda real (Walmart M5)
 
 [![tests](https://github.com/CastilloFelipe/inventario-estocastico/actions/workflows/tests.yml/badge.svg)](https://github.com/CastilloFelipe/inventario-estocastico/actions/workflows/tests.yml)
+[![Abrir la app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://inventario-estocastico.streamlit.app/)
 
 ¿La fórmula clásica de stock de seguridad entrega el servicio que promete cuando la demanda
 es real? Este proyecto lo prueba con los 3.049 productos de una tienda Walmart (CA_1, datos
@@ -33,6 +34,8 @@ a la vez, una forma de aprender modelos estocásticos de inventario.
 Detalle, tablas por clase y categoría y limitaciones: [docs/resultados.md](docs/resultados.md).
 
 ## Demo
+
+**App en línea:** https://inventario-estocastico.streamlit.app/
 
 ```bash
 streamlit run app/streamlit_app.py
