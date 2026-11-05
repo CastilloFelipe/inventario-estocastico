@@ -97,3 +97,49 @@ def muestrear_demanda(
             idx = validos[(u * len(validos)).astype(np.int64)]
             out[:, cols, j] = np.rint(historia[idx, j]).astype(np.int64)
     return out
+
+
+def muestrear_demanda_bloques(
+    rng: np.random.Generator,
+    historia: np.ndarray,
+    dow_hist: np.ndarray,
+    dow_inicio: int,
+    n_dias: int,
+    reps: int,
+    inicio: np.ndarray,
+    bloque: int = 28,
+) -> np.ndarray:
+    """Bootstrap por bloques: (reps, n_dias, items), int64.
+
+    Cada réplica concatena bloques de `bloque` días consecutivos de la historia
+    real del producto (desde su `inicio`), así conserva la dependencia entre
+    días. Cada bloque empieza en un día histórico con el mismo día de semana
+    que el día simulado donde empieza (el día simulado 0 tiene `dow_inicio`);
+    el último bloque se recorta a `n_dias`. Si la historia válida es más corta
+    que `bloque`, usa el bloque más largo posible; si ningún inicio válido
+    tiene el día de semana pedido, usa cualquiera. Si nunca vende, ceros.
+    """
+    historia = np.asarray(historia)
+    dow_hist = np.asarray(dow_hist)
+    dias_h, items = historia.shape
+    out = np.zeros((reps, n_dias, items), dtype=np.int64)
+    if n_dias <= 0:
+        return out
+    for j in range(items):
+        if inicio[j] < 0:
+            continue
+        b = max(1, min(int(bloque), dias_h - int(inicio[j])))
+        comienzos_todos = np.arange(inicio[j], dias_h - b + 1)
+        n_bloques = -(-n_dias // b)
+        dow_bloques = (dow_inicio + np.arange(n_bloques) * b) % 7
+        comienzos = np.empty((reps, n_bloques), dtype=np.int64)
+        for w in np.unique(dow_bloques):
+            validos = comienzos_todos[dow_hist[comienzos_todos] == w]
+            if len(validos) == 0:
+                validos = comienzos_todos
+            cols = np.flatnonzero(dow_bloques == w)
+            u = rng.random((reps, len(cols)))
+            comienzos[:, cols] = validos[(u * len(validos)).astype(np.int64)]
+        idx = (comienzos[:, :, None] + np.arange(b)).reshape(reps, -1)[:, :n_dias]
+        out[:, :, j] = np.rint(historia[idx, j]).astype(np.int64)
+    return out

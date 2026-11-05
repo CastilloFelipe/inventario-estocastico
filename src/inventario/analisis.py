@@ -1,5 +1,9 @@
 """Preguntas A y B: fórmula vs simulación, y curva inventario vs fill rate.
 
+La simulación se calibra con dos remuestreos de la demanda: bootstrap diario
+por día de semana (días independientes) y bootstrap por bloques de días
+consecutivos (conserva la autocorrelación). Ambos usan los mismos lead times.
+
 Cada producto usa su propio generador aleatorio, derivado de
 `(semilla, índice global del producto, etapa)`. Así el tamaño del lote solo
 cambia cuántos productos se simulan juntos (memoria), nunca los resultados.
@@ -16,13 +20,15 @@ from scipy import stats
 from inventario.backtest import backtest_con_lead_times, n_revisiones
 from inventario.datos import DatosTienda
 from inventario.demanda import (ajustar_distribuciones, censura_sospechosa,
-                                clasificar, muestrear_demanda, primera_venta)
+                                clasificar, muestrear_demanda,
+                                muestrear_demanda_bloques, primera_venta)
 from inventario.politicas import s_formula, s_simulacion
 from inventario.simulador import Metricas, muestrear_lead_times
 
 # Etapas de la semilla por producto
 ETAPA_CALIBRACION = 0  # demanda bootstrap y lead times de la calibración
 ETAPA_BACKTEST = 1     # lead times del backtest
+ETAPA_BLOQUES = 2      # demanda bootstrap por bloques de la calibración
 Z_TOPE = 3.72          # 99,99%: base del tope de búsqueda s_max
 
 Progreso = Callable[[int, int], None]
@@ -38,6 +44,7 @@ class Config:
     costo_anual: float = 0.25
     semilla: int = 2026
     lote: int = 250
+    bloque: int = 28
     meta_a: float = 0.95
     metas_b: tuple[float, ...] = (0.85, 0.90, 0.95, 0.97, 0.98, 0.99)
 
@@ -95,6 +102,21 @@ def _calibracion(datos: DatosTienda, cfg: Config, base: _Base,
     return np.concatenate(dem, axis=2), np.concatenate(lts, axis=2)
 
 
+def _calibracion_bloques(datos: DatosTienda, cfg: Config, base: _Base,
+                         idx: np.ndarray) -> np.ndarray:
+    """Demanda bootstrap por bloques `(reps, calentamiento + dias_sim, lote)`.
+
+    Mismo calendario que `_calibracion`; los lead times se reutilizan de ahí.
+    """
+    n = cfg.calentamiento + cfg.dias_sim
+    dow_inicio = int((datos.dow_prueba[0] - cfg.calentamiento) % 7)
+    return np.concatenate([
+        muestrear_demanda_bloques(_rng(cfg, j, ETAPA_BLOQUES), base.calib[:, [j]],
+                                  datos.dow_calib, dow_inicio, n, cfg.reps,
+                                  base.inicio[[j]], cfg.bloque)
+        for j in idx], axis=2)
+
+
 def _backtests(cfg: Config, base: _Base, idx: np.ndarray,
                niveles: list[np.ndarray]) -> list[Metricas]:
     """Backtest de cada vector S en `niveles` con los mismos lead times."""
@@ -117,6 +139,9 @@ def pregunta_a(datos: DatosTienda, cfg: Config,
                progreso: Progreso | None = None) -> pd.DataFrame:
     """Fórmula (z de meta_a) vs S calibrado por simulación (α = meta_a), por producto.
 
+    La simulación se calibra con bootstrap diario (`*_sim`) y por bloques
+    (`*_bloques`); las tres políticas se evalúan en el mismo backtest.
+
     Los productos sin ventas en calibración quedan con clase "sin_ventas" y
     métricas vacías; `resumen_a` los excluye y los cuenta.
     """
@@ -131,10 +156,11 @@ def pregunta_a(datos: DatosTienda, cfg: Config,
         mejor[j] = ajustar_distribuciones(x)["mejor"]
 
     S_sim = np.zeros(items, dtype=np.int64)
+    S_bl = np.zeros(items, dtype=np.int64)
     alcanzado = np.zeros(items, dtype=bool)
-    met = {k: np.full(items, np.nan) for k in
-           ("alpha_formula", "alpha_sim", "fill_formula", "fill_sim",
-            "inv_formula", "inv_sim")}
+    alcanzado_bl = np.zeros(items, dtype=bool)
+    met = {f"{m}_{p}": np.full(items, np.nan) for m in ("alpha", "fill", "inv")
+           for p in ("formula", "sim", "bloques")}
     lotes = _lotes(base.validos, cfg.lote)
     for k, idx in enumerate(lotes):
         dem, lt = _calibracion(datos, cfg, base, idx)
@@ -142,8 +168,13 @@ def pregunta_a(datos: DatosTienda, cfg: Config,
                              cfg.calentamiento)
         del dem
         S_sim[idx], alcanzado[idx] = S, ok
-        mf, ms = _backtests(cfg, base, idx, [base.S_formula[idx], S])
-        for nombre, m in (("formula", mf), ("sim", ms)):
+        dem_bl = _calibracion_bloques(datos, cfg, base, idx)
+        S_b, ok_b = s_simulacion(dem_bl, lt, cfg.R, cfg.meta_a, "ciclo",
+                                 base.s_max[idx], cfg.calentamiento)
+        del dem_bl
+        S_bl[idx], alcanzado_bl[idx] = S_b, ok_b
+        mf, ms, mb = _backtests(cfg, base, idx, [base.S_formula[idx], S, S_b])
+        for nombre, m in (("formula", mf), ("sim", ms), ("bloques", mb)):
             met[f"alpha_{nombre}"][idx] = m.servicio_ciclo
             met[f"fill_{nombre}"][idx] = m.fill_rate
             met[f"inv_{nombre}"][idx] = m.inventario_prom
@@ -167,10 +198,24 @@ def pregunta_a(datos: DatosTienda, cfg: Config,
         "fill_sim": met["fill_sim"],
         "inv_usd_formula": met["inv_formula"] * precio,
         "inv_usd_sim": met["inv_sim"] * precio,
+        "S_bloques": _con_vacios(S_bl, valido, "Int64"),
+        "alcanzado_bloques": _con_vacios(alcanzado_bl, valido, "boolean"),
+        "alpha_bloques": met["alpha_bloques"],
+        "fill_bloques": met["fill_bloques"],
+        "inv_usd_bloques": met["inv_bloques"] * precio,
+        "demanda_prueba": base.prueba.sum(axis=0).astype(np.int64),
     })
 
 
+def _fill_ponderado(fill: np.ndarray, demanda: np.ndarray) -> float:
+    """Fill rate agregado: media de fill ponderada por la demanda de prueba."""
+    con_fill = ~np.isnan(fill)
+    peso = demanda[con_fill].sum()
+    return float((fill[con_fill] * demanda[con_fill]).sum() / peso) if peso > 0 else 1.0
+
+
 def _agregar(g: pd.DataFrame) -> dict:
+    demanda = g["demanda_prueba"].to_numpy(dtype=float)
     return {
         "n": len(g),
         "alpha_formula": g["alpha_formula"].mean(),
@@ -181,6 +226,12 @@ def _agregar(g: pd.DataFrame) -> dict:
         "inv_usd_sim": g["inv_usd_sim"].sum(),
         "n_sin_precio": int(g["inv_usd_sim"].isna().sum()),
         "n_no_alcanzado": int((~g["alcanzado"].astype(bool)).sum()),
+        "alpha_bloques": g["alpha_bloques"].mean(),
+        "fill_bloques": g["fill_bloques"].mean(),
+        "inv_usd_bloques": g["inv_usd_bloques"].sum(),
+        **{f"fill_pond_{p}": _fill_ponderado(g[f"fill_{p}"].to_numpy(dtype=float),
+                                              demanda)
+           for p in ("formula", "sim", "bloques")},
     }
 
 
@@ -206,22 +257,32 @@ def curva_b(datos: DatosTienda, cfg: Config,
             progreso: Progreso | None = None) -> pd.DataFrame:
     """Inventario USD y fill logrado en la prueba con S calibrado por fill rate.
 
-    Todas las metas usan la misma demanda y lead times de calibración y de
+    Una curva por método de calibración (`metodo` "diario" o "bloques"). Todas
+    las metas y ambos métodos usan los mismos lead times de calibración y de
     backtest (números aleatorios comunes), así S crece con la meta.
+    `n_no_alcanzado` cuenta los productos cuya meta no se alcanzó ni con s_max.
     """
     base = _base(datos, cfg)
     items = base.calib.shape[1]
-    inv = {m: np.full(items, np.nan) for m in cfg.metas_b}
-    fill = {m: np.full(items, np.nan) for m in cfg.metas_b}
+    claves = [(metodo, meta) for metodo in ("diario", "bloques") for meta in cfg.metas_b]
+    inv = {c: np.full(items, np.nan) for c in claves}
+    fill = {c: np.full(items, np.nan) for c in claves}
+    no_ok = {c: np.zeros(items, dtype=bool) for c in claves}
     lotes = _lotes(base.validos, cfg.lote)
     for k, idx in enumerate(lotes):
         dem, lt = _calibracion(datos, cfg, base, idx)
-        niveles = [s_simulacion(dem, lt, cfg.R, meta, "fill", base.s_max[idx],
-                                cfg.calentamiento)[0] for meta in cfg.metas_b]
+        res = [s_simulacion(dem, lt, cfg.R, meta, "fill", base.s_max[idx],
+                            cfg.calentamiento) for meta in cfg.metas_b]
         del dem
-        for meta, m in zip(cfg.metas_b, _backtests(cfg, base, idx, niveles)):
-            inv[meta][idx] = m.inventario_prom
-            fill[meta][idx] = m.fill_rate
+        dem = _calibracion_bloques(datos, cfg, base, idx)
+        res += [s_simulacion(dem, lt, cfg.R, meta, "fill", base.s_max[idx],
+                             cfg.calentamiento) for meta in cfg.metas_b]
+        del dem
+        metricas = _backtests(cfg, base, idx, [S for S, _ in res])
+        for c, (_, ok), m in zip(claves, res, metricas):
+            inv[c][idx] = m.inventario_prom
+            fill[c][idx] = m.fill_rate
+            no_ok[c][idx] = ~ok
         if progreso:
             progreso(k + 1, len(lotes))
 
@@ -231,16 +292,15 @@ def curva_b(datos: DatosTienda, cfg: Config,
     grupos = [(c, categorias == c) for c in sorted(set(datos.categorias))]
     grupos.append(("TOTAL", np.ones(items, dtype=bool)))
     filas = []
-    for meta in cfg.metas_b:
-        usd = inv[meta] * precio
+    for metodo, meta in claves:
+        c = (metodo, meta)
+        usd = inv[c] * precio
         for nombre, mascara in grupos:
             inventario = float(np.nansum(usd[mascara]))
-            con_fill = mascara & ~np.isnan(fill[meta])
-            peso = demanda_prueba[con_fill].sum()
-            fill_logrado = (float((fill[meta][con_fill] * demanda_prueba[con_fill]).sum()
-                                  / peso) if peso > 0 else 1.0)
-            filas.append({"meta": meta, "categoria": nombre,
+            filas.append({"metodo": metodo, "meta": meta, "categoria": nombre,
                           "inventario_usd": inventario,
                           "costo_anual_usd": inventario * cfg.costo_anual,
-                          "fill_logrado": fill_logrado})
+                          "fill_logrado": _fill_ponderado(fill[c][mascara],
+                                                          demanda_prueba[mascara]),
+                          "n_no_alcanzado": int(no_ok[c][mascara].sum())})
     return pd.DataFrame(filas)

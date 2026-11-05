@@ -62,7 +62,9 @@ def test_backtest_demanda_cero_y_reproducible():
 def test_columnas_y_clases_de_la_pregunta_a(tabla_a):
     cols = ["item_id", "categoria", "clase", "censura", "mejor_dist", "S_formula",
             "S_sim", "alcanzado", "alpha_formula", "alpha_sim", "fill_formula",
-            "fill_sim", "inv_usd_formula", "inv_usd_sim"]
+            "fill_sim", "inv_usd_formula", "inv_usd_sim", "S_bloques",
+            "alcanzado_bloques", "alpha_bloques", "fill_bloques", "inv_usd_bloques",
+            "demanda_prueba"]
     assert list(tabla_a.columns) == cols
     clases = dict(zip(tabla_a["item_id"], tabla_a["clase"]))
     assert clases["SUAVE"] == "suave" and clases["ERRATICA"] == "erratica"
@@ -110,16 +112,20 @@ def test_lote_no_cambia_el_resultado():
 
 def test_curva_b_inventario_no_decreciente_en_la_meta():
     curva = curva_b(_datos(), CFG)
-    assert list(curva.columns) == ["meta", "categoria", "inventario_usd",
-                                   "costo_anual_usd", "fill_logrado"]
+    assert list(curva.columns) == ["metodo", "meta", "categoria", "inventario_usd",
+                                   "costo_anual_usd", "fill_logrado", "n_no_alcanzado"]
+    assert set(curva["metodo"]) == {"diario", "bloques"}
     assert set(curva["categoria"]) == {"FOODS", "HOBBIES", "HOUSEHOLD", "TOTAL"}
-    total = curva[curva["categoria"] == "TOTAL"].sort_values("meta")
-    assert list(total["meta"]) == list(CFG.metas_b)
-    assert np.all(np.diff(total["inventario_usd"].to_numpy()) >= -1e-9)
-    np.testing.assert_allclose(total["costo_anual_usd"],
-                               total["inventario_usd"] * CFG.costo_anual)
-    assert total["fill_logrado"].between(0, 1).all()
-    assert total["fill_logrado"].iloc[-1] >= total["fill_logrado"].iloc[0]
+    for metodo in ("diario", "bloques"):
+        total = curva[(curva["categoria"] == "TOTAL")
+                      & (curva["metodo"] == metodo)].sort_values("meta")
+        assert list(total["meta"]) == list(CFG.metas_b)
+        assert np.all(np.diff(total["inventario_usd"].to_numpy()) >= -1e-9)
+        np.testing.assert_allclose(total["costo_anual_usd"],
+                                   total["inventario_usd"] * CFG.costo_anual)
+        assert total["fill_logrado"].between(0, 1).all()
+        assert total["fill_logrado"].iloc[-1] >= total["fill_logrado"].iloc[0]
+        assert total["n_no_alcanzado"].between(0, 5).all()
 
 
 def test_prueba_identica_y_poisson_alta_logra_alpha():
@@ -127,3 +133,63 @@ def test_prueba_identica_y_poisson_alta_logra_alpha():
     fila = tabla.set_index("item_id").loc["SUAVE"]
     assert fila["alcanzado"]
     assert fila["alpha_sim"] >= 0.9
+
+
+def test_columnas_nuevas_de_bloques_y_demanda_prueba(tabla_a):
+    datos = _datos()
+    t = tabla_a.set_index("item_id")
+    np.testing.assert_array_equal(t["demanda_prueba"].to_numpy(),
+                                  datos.ventas_prueba.sum(axis=0))
+    assert pd.isna(t.loc["SIN_VENTAS", "S_bloques"])
+    assert pd.isna(t.loc["SIN_PRECIO", "inv_usd_bloques"])
+    ok = t.drop(index="SIN_VENTAS")
+    assert ok["alpha_bloques"].between(0, 1).all()
+    assert ok["fill_bloques"].between(0, 1).all()
+    assert (ok["S_bloques"] >= 0).all()
+
+
+def _datos_ar1(n_items=8, phi=0.9, semilla=11):
+    rng = np.random.default_rng(semilla)
+    n = N_CALIB * 3 + N_PRUEBA
+    cols = []
+    for _ in range(n_items):
+        e = rng.normal(0, 6, n)
+        x = np.empty(n)
+        x[0] = e[0]
+        for t in range(1, n):
+            x[t] = phi * x[t - 1] + e[t]
+        cols.append(np.maximum(0, np.rint(15 + x)))
+    ventas = np.column_stack(cols).astype(np.int64)
+    fechas = pd.date_range("2015-01-05", periods=n)
+    return DatosTienda(
+        item_ids=[f"AR_{i}" for i in range(n_items)], categorias=["FOODS"] * n_items,
+        fechas=fechas, dow=fechas.weekday.to_numpy(), ventas=ventas,
+        precio=np.ones(n_items), n_calib=N_CALIB * 3)
+
+
+def test_bloques_logran_mas_alpha_que_el_diario_con_demanda_ar1():
+    tabla = pregunta_a(_datos_ar1(), Config(reps=20, dias_sim=112))
+    assert tabla["alpha_bloques"].mean() > tabla["alpha_sim"].mean()
+    assert (tabla["S_bloques"] >= tabla["S_sim"]).mean() >= 0.75
+
+
+def test_fill_ponderado_por_demanda_de_prueba():
+    df = pd.DataFrame({
+        "item_id": ["A", "B"], "categoria": ["FOODS", "FOODS"],
+        "clase": ["suave", "suave"], "alcanzado": [True, False],
+        "alcanzado_bloques": [True, True],
+        "alpha_formula": [0.9, 0.8], "alpha_sim": [0.9, 0.8],
+        "alpha_bloques": [0.95, 0.9],
+        "fill_formula": [0.9, 0.5], "fill_sim": [1.0, 0.6],
+        "fill_bloques": [0.8, 0.7],
+        "inv_usd_formula": [1.0, 2.0], "inv_usd_sim": [1.0, 2.0],
+        "inv_usd_bloques": [3.0, 4.0],
+        "demanda_prueba": [300, 100],
+    })
+    total = resumen_a(df).set_index("agrupacion").loc["total"]
+    assert total["fill_pond_formula"] == pytest.approx((0.9 * 300 + 0.5 * 100) / 400)
+    assert total["fill_pond_sim"] == pytest.approx((1.0 * 300 + 0.6 * 100) / 400)
+    assert total["fill_pond_bloques"] == pytest.approx((0.8 * 300 + 0.7 * 100) / 400)
+    assert total["fill_bloques"] == pytest.approx(0.75)
+    assert total["alpha_bloques"] == pytest.approx(0.925)
+    assert total["inv_usd_bloques"] == pytest.approx(7.0)

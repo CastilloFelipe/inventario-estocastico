@@ -51,16 +51,22 @@ def main(argv: list[str] | None = None) -> None:
     print("\nResumen")
     print(f"  Productos analizados: {total['n']} (excluidos sin ventas: {excluidos}, "
           f"sin precio: {total['n_sin_precio']})")
-    print(f"  α logrado  fórmula {total['alpha_formula']:.3f} | "
-          f"simulación {total['alpha_sim']:.3f}  (meta {cfg.meta_a})")
-    print(f"  Fill rate  fórmula {total['fill_formula']:.3f} | "
-          f"simulación {total['fill_sim']:.3f}")
-    print(f"  Inventario USD  fórmula {total['inv_usd_formula']:,.0f} | "
-          f"simulación {total['inv_usd_sim']:,.0f}")
+    print(f"  {'':16}{'fórmula':>12}{'sim. diaria':>14}{'sim. bloques':>14}")
+    filas = [("α logrado (media)", "alpha", "{:.3f}"),
+             ("Fill (media)", "fill", "{:.3f}"),
+             ("Fill (ponderado)", "fill_pond", "{:.3f}"),
+             ("Inventario USD", "inv_usd", "{:,.0f}")]
+    for etiqueta, col, fmt in filas:
+        valores = [fmt.format(total[f"{col}_{p}"]) for p in ("formula", "sim", "bloques")]
+        print(f"  {etiqueta:16}{valores[0]:>12}{valores[1]:>14}{valores[2]:>14}")
+    no_alc_bl = int((~a["alcanzado_bloques"].fillna(True)).sum())
+    print(f"  Meta α {cfg.meta_a}; sin alcanzar con s_max: diaria {total['n_no_alcanzado']}, "
+          f"bloques {no_alc_bl}")
     print("  Curva B (TOTAL):")
     for _, f in b[b["categoria"] == "TOTAL"].iterrows():
-        print(f"    meta {f['meta']:.2f}: inventario {f['inventario_usd']:>12,.0f} USD, "
-              f"fill logrado {f['fill_logrado']:.3f}")
+        print(f"    {f['metodo']:>7} meta {f['meta']:.2f}: inventario "
+              f"{f['inventario_usd']:>12,.0f} USD, fill logrado {f['fill_logrado']:.3f}, "
+              f"sin alcanzar {f['n_no_alcanzado']}")
     print(f"Archivos en {args.salida}/ ({time.time() - inicio:.0f} s)")
 
 
